@@ -1,0 +1,78 @@
+function MICRONEURISMA
+    IM = imread("16_left.jpeg");
+    %CORTAMOS LA IMAGEN
+    x = imcrop(IM);
+    %OBTENEMOS EL COMPONENTE VERDE PARA LA PRIMERA COMARACION
+    %SACAMOS LA ESCALA DE GRISES PARA LA SEGUNDA COMPARACION
+    x1 = x(:,:,2);
+    x2 = rgb2gray(x);
+    %COMPARACION PARA MICRONEURISMA 1
+    %1. MEJORAMOS EN CONTRASTE LLAMANDO A LA FUNCION ESTIRAR CONTRASTE
+    %PARA ESTE METODO USAMOS EL METODO ADAPTATIVO DE MEJORAMIENTO DE
+    %CONTRASTE VISTO EN CLASE
+    mejoramiento_contraste1 = estirarContraste(x1);
+    %SACAMOS LOS BORDES SANDO DOS METODOS PARA OPTIMZAR EL PRIMERO ES CANNY
+    %EL SEGUNDO ES SOBEL LUEGO SUMAMOS AMBOS PARA TENER UNA MEJOR
+    %GENERACION DE BORDES
+    BW1 = edge(mejoramiento_contraste1,'canny');
+    BW2 = edge(mejoramiento_contraste1,'sobel');
+    comb = BW1 + BW2;
+    %LLENAMOS LAS AREAS QUE SON REDONDAS PARA OBTENER MAS IFORMACION
+    bw_filled = imfill(comb, 'holes');
+    %NOS QUEDAMOS CON LAS AREAS CERRDAS Y LAS DEMAS LAS ELIMINAMOS
+    holes = bw_filled & ~comb;
+    ajuste = 5;
+    IMlimpio = bwareaopen(holes, ajuste); 
+    fi = histograma(x2);
+    oj = ojiva_relativa(fi);
+    mejoramiento_contraste2 = aplicacion(x2,oj);
+    %PARA ESTE CASO USAMOS OPERACIONES MORFOLOGICAS PERO ANTES DE USAR LAS 
+    %OPERACIONES MORFOLOGICAS, LLEVAMOS LA IMAGEN A NEGATIVO
+    imagenProcesada = procesarImagen(mejoramiento_contraste2);
+    %PROGRAMAMOS EL MODELO EN BLANCO Y NEGRO
+    factor_optimo = 1.35;
+    prom = factor_optimo*mean(imagenProcesada(:));
+    IMbw = (imagenProcesada>prom);
+    [f,c] = size(imagenProcesada);
+    per = 0.01;
+    i_tamano = round(per*f*c);
+    IMlimpio1 = bwareaopen(IMbw,i_tamano);
+    respuesta = IMlimpio&IMlimpio1;
+    figure, imshow(respuesta); 
+end
+
+function y = estirarContraste(x)
+    x = double(x);
+    x_max = max(x(:));
+    x_min = min(x(:));
+    y = 255 / (x_max - x_min) * (x - x_min);
+    y = uint8(y);
+end
+
+function y = procesarImagen(x)
+    negativo = 255 - x;
+    negativo = uint8(negativo);
+    se = strel("disk", 100);
+    erosionar = imerode(negativo, se);
+    dilatar = imdilate(erosionar, se);
+    y = negativo - dilatar;
+end
+function y = histograma(x)
+aux = double(x(:)); y = zeros(1,256);
+for i = 0:255
+    y(i+1) = sum(aux==i);
+end
+end
+function y = ojiva_relativa(x)
+N = sum(x);
+hi = x/N;
+y = cumsum(hi);
+end
+function y = aplicacion(IM,x)
+OUT = x * 255;
+[f, c] = size(IM); AUX = zeros(f, c);
+for i = 0:255
+    AUX = AUX + (IM == i).* OUT(i+1);
+end
+y = uint8(AUX);
+end
