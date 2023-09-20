@@ -1,0 +1,86 @@
+function DETECCION_VENAS
+IM = imread("16_left.jpeg");
+%CORTAMOS LA IMAGEN
+IM = imcrop(IM);
+%OBTENEMOS EL COMPONENTE VERDE PARA LA PRIMERA COMARACION
+%SCAMOS LA ESCALA DE GRISES PARA LA SEGUNDA COMPARACION
+x1 = IM(:,:,2);
+x2 = rgb2gray(IM);
+%COMPARACION PARA VENAS 1
+%1. MEJORAMOS EN CONTRASTE LLAMANDO A LA FUNCION ESTIRAR CONTRASTE
+%PARA ESTE METODO USAMOS EL METODO ADAPTATIVO DE MEJORAMIENTO DE
+%CONTRASTE VISTO EN CLASE
+mejoramiento_contraste1 = estirarContraste(x1);
+%2. PARA ESTE CASO USAMOS OPERACIONES MORFOLOGICAS PERO ANTES DE USAR LAS 
+%OPERACIONES MORFOLOGICAS, LLEVAMOS LA IMAGEN A NEGATIVO
+imagenProcesada = procesarImagen(mejoramiento_contraste1);
+%PROGRAMAMOS EL MODELO EN BLANCO Y NEGRO
+factor_optimo1 = 1.35;%ESTE VALOR SE DEBE AJUSTAR
+prom1 = factor_optimo1*mean(imagenProcesada(:));
+IMbw1 = (imagenProcesada>prom1);
+%LIMPIAMOS LAS AREAS PEQUEÑAS
+[f,c] = size(x1);
+per1 = 0.01;%ESTE VALOR SE DEBE AJUSTAR
+i_tamano1 = round(per1*f*c);
+IMlimpio1 = bwareaopen(IMbw1,i_tamano1);
+%COMPARACION PARA VENAS 2
+%MEJORAMOS EL CONTRASTE POR ANALISI DE HISTOGRAMA
+fi = histograma(x2);
+oj = ojiva_relativa(fi);
+mejoramiento_contraste2 = aplicacion(x2,oj);
+%PROGRAMAMOS EL MODELO EN BLANCO Y NEGRO
+factor_optimo2 = 1.0;%ESTE VALOR SE DEBE AJUSTAR
+prom2 = factor_optimo2*mean(mejoramiento_contraste2(:));
+IMbw2 = (mejoramiento_contraste2<prom2);
+%LIMPIAMOS LAS AREAS PEQUEÑAS
+[f,c] = size(x2);
+per2 = 0.01;
+i_tamano2 = round(per2*f*c);
+IMlimpio2 = bwareaopen(IMbw2,i_tamano2);
+%USAMOS COMPUERTAS LOGICAS PARA PODER TRABAJAR MEJOR CON LOS PUNTOS QUE
+%QUEREMOS TRABAJAR
+resultado_OR = (IMlimpio1|IMlimpio2);
+resultado_AND1 = IMlimpio1&IMlimpio2;
+resultado_AND2 = resultado_AND1|IMlimpio1;
+resultado_AND3 = IMbw1&resultado_OR;
+final = resultado_AND3|resultado_AND2;
+imshow(final)
+end
+%COMPARACION PARA VENAS 1
+%MEJORAMIENTO DE CONTRASTE ADAPTATIVO
+function y = estirarContraste(x)
+    x = double(x);
+    x_max = max(x(:));
+    x_min = min(x(:));
+    y = 255 / (x_max - x_min) * (x - x_min);
+    y = uint8(y);
+end
+%LLEVAMOS A NEGATIVO Y USAMOS LAS OPERACIONES MORFOLOGICAS
+function y = procesarImagen(x)
+    negativo = 255 - x;
+    negativo = uint8(negativo);
+    se = strel("disk", 100);
+    erosionar = imerode(negativo, se);
+    dilatar = imdilate(erosionar, se);
+    y = negativo - dilatar;
+end
+%COMPARACION PARA VENAS 2
+function y = histograma(x)
+aux = double(x(:)); y = zeros(1,256);
+for i = 0:255
+    y(i+1) = sum(aux==i);
+end
+end
+function y = ojiva_relativa(x)
+N = sum(x);
+hi = x/N;
+y = cumsum(hi);
+end
+function y = aplicacion(IM,x)
+OUT = x * 255;
+[f, c] = size(IM); AUX = zeros(f, c);
+for i = 0:255
+    AUX = AUX + (IM == i).* OUT(i+1);
+end
+y = uint8(AUX);
+end
